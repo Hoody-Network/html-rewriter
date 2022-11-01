@@ -1,0 +1,31 @@
+{
+  "name": "html-rewriter",
+  "version": "0.1.0",
+  "description": "Node.js-based derivative of the worker-tools/html-rewriter repo",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "directories": {
+    "test": "test"
+  },
+  "devDependencies": {
+    "@types/node": "^18.11.8",
+    "typescript": "^4.8.4"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "buildBase": "make dist",
+    "buildWrapper": "tsc",
+    "build": "npm run buildBase && npm run buildWrapper"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hoody-Network/html-rewriter.git"
+  },
+  "author": "vocafeuvre",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Hoody-Network/html-rewriter/issues"
+  },
+  "homepage": "https://github.com/Hoody-Network/html-rewriter#readme"
+}

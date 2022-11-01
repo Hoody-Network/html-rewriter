@@ -1,4 +1,6 @@
-// FIXME: replace multiple 1 import from skypack!?
+import * as path from 'path';
+import * as fspromis from 'fs/promises';
+
 import type {
   HTMLRewriter as BaseHTMLRewriter,
   ContentTypeOptions,
@@ -10,10 +12,18 @@ import type {
   DocumentEnd,
   ElementHandlers,
   DocumentHandlers,
-} from "./vendor/html_rewriter.d.ts";
-import * as _base from './vendor/html_rewriter.js'
+} from "./vendor/html_rewriter";
+import * as _base from './vendor/html_rewriter.js';
+
+import {
+  Readable,
+  Writable,
+  Transform
+} from "stream"
+
+// @ts-ignore
 const { default: initWASM } = _base;
-const base: typeof import("./vendor/html_rewriter.d.ts") = _base;
+const base = _base;
 
 export type { 
   ContentTypeOptions,
@@ -26,8 +36,6 @@ export type {
   ElementHandlers,
   DocumentHandlers,
 }
-
-import { ResolvablePromise } from 'https://ghuc.cc/worker-tools/resolvable-promise/index.ts'
 
 type SelectorElementHandlers = [selector: string, handlers: ElementHandlers];
 
@@ -42,22 +50,26 @@ const toWASMResponse = (response: Response) => {
   return new Response(body, { ...props, headers })
 }
 
-const initialized = new ResolvablePromise<void>();
-let executing = false;
+let resolveInitialized: () => void;
+const initialized = new Promise<void>((resolve) => {
+  resolveInitialized = resolve
+});
+let executing = false, settled = false;
 
 export class HTMLRewriter {
-  readonly #elementHandlers: SelectorElementHandlers[] = [];
-  readonly #documentHandlers: DocumentHandlers[] = [];
+  readonly elementHandlers: SelectorElementHandlers[] = [];
+  readonly documentHandlers: DocumentHandlers[] = [];
   [kEnableEsiTags] = false;
 
   constructor() {
-    if (!initialized.settled && !executing) {
+    if (!settled && !executing) {
       executing = true;
-      fetch(new URL("./vendor/html_rewriter_bg.wasm", import.meta.url).href)
-        .then(r => r.ok ? r : (() => { throw Error('WASM response not ok') })())
+
+      fspromis.readFile(path.join(import.meta.url, "./vendor/html_rewriter_bg.wasm"))
+        .then((b) => new Response(b))
         .then(toWASMResponse)
         .then(initWASM)
-        .then(() => initialized.resolve())
+        .then(resolveInitialized)
         .catch(err => { 
           executing = false; 
           console.error(err);
@@ -66,12 +78,12 @@ export class HTMLRewriter {
   }
 
   on(selector: string, handlers: ElementHandlers): this {
-    this.#elementHandlers.push([selector, handlers]);
+    this.elementHandlers.push([selector, handlers]);
     return this;
   }
 
   onDocument(handlers: DocumentHandlers): this {
-    this.#documentHandlers.push(handlers);
+    this.documentHandlers.push(handlers);
     return this;
   }
 
@@ -102,10 +114,10 @@ export class HTMLRewriter {
           { enableEsiTags: this[kEnableEsiTags] }
         );
         // Add all registered handlers
-        for (const [selector, handlers] of this.#elementHandlers) {
+        for (const [selector, handlers] of this.elementHandlers) {
           rewriter.on(selector, handlers);
         }
-        for (const handlers of this.#documentHandlers) {
+        for (const handlers of this.documentHandlers) {
           rewriter.onDocument(handlers);
         }
       },
@@ -124,6 +136,115 @@ export class HTMLRewriter {
     // rewriting content, so remove it
     res.headers.delete("Content-Length");
     return res;
+  }
+
+  pipeThrough({ 
+    readable,
+    writable
+  }: {
+    readable: ReadableStream<Uint8Array>, 
+    writable: WritableStream<Uint8Array> 
+  }): ReadableStream<Uint8Array> {
+    let rewriter: BaseHTMLRewriter;
+    const transformStream = new TransformStream<Uint8Array, Uint8Array>({
+      start: async (controller) => {
+        // Create a rewriter instance for this transformation that writes its
+        // output to the transformed response's stream. Note that each
+        // BaseHTMLRewriter can only be used once. 
+        await initialized;
+        rewriter = new base.HTMLRewriter(
+          (output) => {
+            // enqueue will throw on empty chunks
+            if (output.length !== 0) controller.enqueue(output);
+          },
+          { enableEsiTags: this[kEnableEsiTags] }
+        );
+        // Add all registered handlers
+        for (const [selector, handlers] of this.elementHandlers) {
+          rewriter.on(selector, handlers);
+        }
+        for (const handlers of this.documentHandlers) {
+          rewriter.onDocument(handlers);
+        }
+      },
+      // The finally() below will ensure the rewriter is always freed.
+      // chunk is guaranteed to be a Uint8Array as we're using the
+      // @miniflare/core Response class, which transforms to a byte stream.
+      transform: (chunk) => rewriter.write(chunk),
+      flush: () => rewriter.end(),
+    });
+    const promise = readable.pipeTo(transformStream.writable);
+    promise.catch(() => {}).finally(() => rewriter?.free());
+
+    if (writable) {
+      transformStream.readable.pipeTo(writable)
+    }
+
+    return transformStream.readable;
+  }
+
+  transformLegacy(params: Transform) : Transform {
+    let rewriter: BaseHTMLRewriter;
+    let stream = new Transform({
+      construct: async (cb) => {
+        // Create a rewriter instance for this transformation that writes its
+        // output to the transformed response's stream. Note that each
+        // BaseHTMLRewriter can only be used once. 
+        try {
+          await initialized;
+          rewriter = new base.HTMLRewriter(
+            (output) => {
+              // enqueue will throw on empty chunks
+              if (output.length !== 0) stream.push(output);
+            },
+            { enableEsiTags: this[kEnableEsiTags] }
+          );
+          // Add all registered handlers
+          for (const [selector, handlers] of this.elementHandlers) {
+            rewriter.on(selector, handlers);
+          }
+          for (const handlers of this.documentHandlers) {
+            rewriter.onDocument(handlers);
+          }
+        } catch (e: any) {
+          cb(e)
+          return
+        }
+
+        cb()
+      },
+      transform: async (chunk, _, cb) => {
+        try {
+          if (!(chunk instanceof Buffer)) {
+            chunk = Buffer.from(chunk)
+          }
+
+          await rewriter.write(chunk)
+        } catch (e: any) {
+          cb(e)
+          return
+        }
+
+        cb()
+      },
+      flush: async (cb) => {
+        try {
+          await rewriter.end()
+          rewriter?.free()
+        } catch (e: any) {
+          cb(e)
+          return
+        }
+
+        cb()
+      }
+    });
+
+    if (params && params instanceof Transform) {
+      return stream.pipe(params)
+    }
+
+    return stream
   }
 }
 
