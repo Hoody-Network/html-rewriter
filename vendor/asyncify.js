@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "https://deno.land/std@0.134.0/testing/asserts.ts";
+import assert from "assert";
 
 /**
  * @typedef {object} WasmExports
@@ -48,7 +48,7 @@ const State = {
 };
 
 function assertNoneState() {
-  assertEquals(wasm.asyncify_get_state(), State.NONE);
+  assert.equal(wasm.asyncify_get_state(), State.NONE);
 }
 
 /**
@@ -72,7 +72,7 @@ function awaitPromise(stackPtr, promise) {
   assertNoneState();
 
   // https://github.com/WebAssembly/binaryen/blob/fb9de9d391a7272548dcc41cd8229076189d7398/src/passes/Asyncify.cpp#L106
-  assertEquals(stackPtr % 4, 0);
+  assert.equal(stackPtr % 4, 0);
   getInt32Memory().set([stackPtr + 8, stackPtr + 1024], stackPtr / 4);
 
   wasm.asyncify_start_unwind(stackPtr);
