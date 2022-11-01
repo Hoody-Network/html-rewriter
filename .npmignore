@@ -1,4 +1,4 @@
-html-rewriter-wasm/**/*
+html-rewriter-wasm
 patches
 scripts
 test
@@ -6,3 +6,7 @@ test
 index.ts
 Makefile
 tsconfig.json
+/npm
+/._*
+/.vscode
+node_modules

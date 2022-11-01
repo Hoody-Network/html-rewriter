@@ -1,6 +1,6 @@
 # The MIT License
 
-Copyright (c) 2022 Florian Klampfer <mail@qwtel.com> (https://qwtel.com/)
+Copyright (c) 2022 Hoody Project <social@hoody.com> (https://hoody.com/)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

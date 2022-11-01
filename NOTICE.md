@@ -1,4 +1,10 @@
 This software includes material copied from or derived from 
+[@worker-tools/html-rewriter](https://github.com/worker-tools/html-rewriter/),
+which is MIT-licensed with the following copyright:
+
+> Copyright (c) 2022 Florian Klampfer
+
+This software includes material copied from or derived from 
 [cloudflare/miniflare](https://github.com/cloudflare/miniflare/),
 which is MIT-licensed with the following copyright:
 
