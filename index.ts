@@ -1,4 +1,3 @@
-import * as path from 'path';
 import * as fspromis from 'fs/promises';
 
 import type {
@@ -16,8 +15,6 @@ import type {
 import * as _base from './vendor/html_rewriter.js';
 
 import {
-  Readable,
-  Writable,
   Transform
 } from "stream"
 
@@ -65,7 +62,7 @@ export class HTMLRewriter {
     if (!settled && !executing) {
       executing = true;
 
-      fspromis.readFile(path.join(import.meta.url, "./vendor/html_rewriter_bg.wasm"))
+      fspromis.readFile(new URL("./vendor/html_rewriter_bg.wasm", import.meta.url))
         .then((b) => new Response(b))
         .then(toWASMResponse)
         .then(initWASM)

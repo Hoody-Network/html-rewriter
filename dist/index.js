@@ -1,5 +1,4 @@
 var _a;
-import * as path from 'path';
 import * as fspromis from 'fs/promises';
 import * as _base from './vendor/html_rewriter.js';
 import { Transform } from "stream";
@@ -28,7 +27,7 @@ export class HTMLRewriter {
         this[_a] = false;
         if (!settled && !executing) {
             executing = true;
-            fspromis.readFile(path.join(import.meta.url, "./vendor/html_rewriter_bg.wasm"))
+            fspromis.readFile(new URL("./vendor/html_rewriter_bg.wasm", import.meta.url))
                 .then((b) => new Response(b))
                 .then(toWASMResponse)
                 .then(initWASM)
@@ -155,7 +154,7 @@ export class HTMLRewriter {
                 }
                 cb();
             },
-            transform: async (chunk, _, cb) => {
+            transform: async (chunk, _, cb) => {                
                 try {
                     if (!(chunk instanceof Buffer)) {
                         chunk = Buffer.from(chunk);
