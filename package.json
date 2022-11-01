@@ -16,7 +16,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "buildBase": "make dist",
     "buildWrapper": "tsc",
-    "build": "npm run buildBase && npm run buildWrapper"
+    "build": "npm run buildBase && npm run buildWrapper",
+    "postinstall": "npx symlink vendor dist/vendor"
   },
   "repository": {
     "type": "git",
@@ -27,5 +28,8 @@
   "bugs": {
     "url": "https://github.com/Hoody-Network/html-rewriter/issues"
   },
-  "homepage": "https://github.com/Hoody-Network/html-rewriter#readme"
+  "homepage": "https://github.com/Hoody-Network/html-rewriter#readme",
+  "dependencies": {
+    "symlink-dir": "^5.0.1"
+  }
 }
