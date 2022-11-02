@@ -36,6 +36,12 @@ export type {
 
 type SelectorElementHandlers = [selector: string, handlers: ElementHandlers];
 
+type TransformLegacyOptions = {
+  flushTimeout?: number
+};
+
+const DEFAULT_FLUSH_TIMEOUT = 1000
+
 const kEnableEsiTags = Symbol("kEnableEsiTags");
 
 // In case a server doesn't return the proper mime type (e.g. githubusercontent.com)..
@@ -180,8 +186,22 @@ export class HTMLRewriter {
     return transformStream.readable;
   }
 
-  transformLegacy(params: Transform) : Transform {
+  transformLegacy(nextStream: Transform, options?: TransformLegacyOptions) : Transform {
+    if (!options) {
+      options = {}
+    }
+
+    if (
+      typeof options.flushTimeout !== 'number' ||
+      isNaN(options.flushTimeout)
+    ) {
+      options.flushTimeout = DEFAULT_FLUSH_TIMEOUT
+    }
+
     let rewriter: BaseHTMLRewriter;
+    let endCb: (() => void) | null | undefined = null;
+    let endTimeout: NodeJS.Timeout | undefined;
+    let pendingChunks = 0;
     let stream = new Transform({
       construct: async (cb) => {
         // Create a rewriter instance for this transformation that writes its
@@ -191,8 +211,15 @@ export class HTMLRewriter {
           await initialized;
           rewriter = new base.HTMLRewriter(
             (output) => {
-              // enqueue will throw on empty chunks
-              if (output.length !== 0) stream.push(output);
+              stream.push(output);
+              pendingChunks--;
+
+              if (endCb && pendingChunks === 0) {
+                endCb()
+                clearTimeout(endTimeout)
+                endCb = null
+                endTimeout = undefined
+              }
             },
             { enableEsiTags: this[kEnableEsiTags] }
           );
@@ -204,41 +231,53 @@ export class HTMLRewriter {
             rewriter.onDocument(handlers);
           }
         } catch (e: any) {
-          cb(e)
-          return
+          cb(e);
+          return;
         }
 
-        cb()
+        cb();
       },
       transform: async (chunk, _, cb) => {
         try {
           if (!(chunk instanceof Buffer)) {
-            chunk = Buffer.from(chunk)
+            chunk = Buffer.from(chunk);
           }
 
-          await rewriter.write(chunk)
+          pendingChunks++;
+          await rewriter.write(chunk);
         } catch (e: any) {
-          cb(e)
-          return
+          cb(e);
+          return;
         }
 
-        cb()
+        cb();
       },
       flush: async (cb) => {
         try {
-          await rewriter.end()
-          rewriter?.free()
+          await rewriter.end();
+          rewriter?.free();
         } catch (e: any) {
-          cb(e)
-          return
+          cb(e);
+          return;
         }
 
-        cb()
+        if (pendingChunks === 0) {
+          cb();
+        } else {
+          endCb = cb;
+          endTimeout = setTimeout(() => {
+            if (endCb) {
+              endCb();
+            }
+
+            endTimeout = undefined;
+          }, options?.flushTimeout)
+        }
       }
     });
 
-    if (params && params instanceof Transform) {
-      return stream.pipe(params)
+    if (nextStream && nextStream instanceof Transform) {
+      return stream.pipe(nextStream)
     }
 
     return stream
