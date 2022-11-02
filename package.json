@@ -1,6 +1,6 @@
 {
   "name": "@hoody-network/html-rewriter",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Node.js-based derivative of the worker-tools/html-rewriter repo",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
